@@ -21,6 +21,7 @@ constexpr double pi() { return M_PI; }
 double deg2rad(double x) { return x * pi() / 180; }
 double rad2deg(double x) { return x * 180 / pi(); }
 
+double ref_val = 0.0;
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
 // else the empty string "" will be returned.
@@ -388,28 +389,27 @@ int main() {
 
           vector<double> next_x_vals;
           vector<double> next_y_vals;
-         
+
           /*for(int i = 0; i < 50; i++) {
             double next_s = car_s + (i+1)*dist_inc;
-	    double next_d = 6; //constant per lane width
-	    vector<double> xy = getXY(next_s, next_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+            double next_d = 6; //constant per lane width
+            vector<double> xy = getXY(next_s, next_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
             next_x_vals.push_back(xy[0]);
             next_y_vals.push_back(xy[1]);
           }*/
-	            	// TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
-           
-
-            
-          	// TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
-          	//*********************************************************************************
+          // TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
+          // TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
+          //*********************************************************************************
 
 
 
 
-          	bool too_close = false;
+          bool too_close = false;
 
-          	int prev_points = previous_path_x.size();
+          int prev_points = previous_path_x.size();
 
+	  if(prev_points > 0)
+		  car_s = end_path_s;
 
 
             //iterate through detected vehicles, determine if there is a car ahead going below speed limit
@@ -419,8 +419,8 @@ int main() {
             for(int i=0; i<sensor_fusion.size(); i++)
             {
                 //determine if car is directly ahead
-                double sensor_d = sensor_fusion[i][6];
-                if (abs(sensor_d - car_d) < 2.7)
+                float sensor_d = sensor_fusion[i][6];
+                if ((sensor_d < (2+4*target_lane+2)) && (sensor_d > (2+4*target_lane-2)))
                 {
                     double vx = sensor_fusion[i][3];
                     double vy = sensor_fusion[i][4];
@@ -432,13 +432,14 @@ int main() {
                     check_distance = check_car_s-car_s;
 
                     //adjust check_distance when wrapping around max_s to zero
-                    if (check_distance > (max_s/2.0))
+                    /*if (check_distance > (max_s/2.0))
                         check_distance -= max_s;
                     if (check_distance < (-1.0*max_s/2.0))
-                        check_distance += max_s;
+                        check_distance += max_s;*/
 
-                    if( (check_distance > 0) && (check_distance<35) )
+                    if( (check_car_s > car_s) && (check_distance<35) ) {
                         too_close = true;
+		    }
                 }
             }
 
@@ -446,15 +447,11 @@ int main() {
 
             if(too_close)
             {
-                set_speed -= 0.223;
+                ref_val -= 0.224;
             }
-            else if (set_speed < check_speed*0.98 && check_distance>40)
+            else if (ref_val < 49.50)
             {
-                set_speed += 0.223;
-            }
-            else if (set_speed < speed_limit*0.98 && check_distance>100)
-            {
-                set_speed += 0.223;
+                ref_val += 0.224;
             }
 
             //if (check_speed < speed_limit*0.9)
@@ -470,14 +467,14 @@ int main() {
             //    prev_points = 0;
 
 
-          	vector<double> ptsx;
-          	vector<double> ptsy;
+          vector<double> ptsx;
+          vector<double> ptsy;
 
-          	double ref_x = car_x;
-          	double ref_y = car_y;
-          	double ref_yaw = deg2rad(car_yaw);
+          double ref_x = car_x;
+          double ref_y = car_y;
+          double ref_yaw = deg2rad(car_yaw);
 
-          	if(prev_points < 2)
+          if(prev_points < 2)
             {
                 //create two points defining a path tangent to the car
                 double prev_car_x = car_x - cos(car_yaw);
@@ -519,9 +516,6 @@ int main() {
             vector<double> next_wp2 = getXY(car_s+90, lane_positions[target_lane], map_waypoints_s, map_waypoints_x, map_waypoints_y);
 
 
-
-
-
             ptsx.push_back(next_wp0[0]);
             ptsx.push_back(next_wp1[0]);
             ptsx.push_back(next_wp2[0]);
@@ -542,15 +536,9 @@ int main() {
             }
 
 
-
             //create spline for smooth path
             tk::spline sp;
-
-
-
             sp.set_points(ptsx,ptsy);
-
-
 
             //load previous points into path planner
             for (int i=0; i<prev_points; i++)
@@ -568,13 +556,9 @@ int main() {
 
             for(int i = 0; i <= 50-prev_points; i++)
             {
-                double N = target_dist/(.02*set_speed);
+                double N = (target_dist/(.02*ref_val/2.24));
                 double x_point = x_add_on+target_x/N;
                 double y_point = sp(x_point);
-
-
-
-
 
                 x_add_on = x_point;
 
@@ -588,31 +572,22 @@ int main() {
                 x_point += ref_x;
                 y_point += ref_y;
 
-
-
                 next_x_vals.push_back(x_point);
                 next_y_vals.push_back(y_point);
             }
-
-
-
-
 
             //double radius = curve_radius(car_x, car_y, map_waypoints_x, map_waypoints_y);
 
             prev_target_lane = target_lane;
 
+          //*********************************************************************************
+          msgJson["next_x"] = next_x_vals;
+          msgJson["next_y"] = next_y_vals;
 
+          auto msg = "42[\"control\","+ msgJson.dump()+"]";
 
-
-          	//*********************************************************************************
-          	msgJson["next_x"] = next_x_vals;
-          	msgJson["next_y"] = next_y_vals;
-
-          	auto msg = "42[\"control\","+ msgJson.dump()+"]";
-
-          	//this_thread::sleep_for(chrono::milliseconds(1000));
-          	ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+          //this_thread::sleep_for(chrono::milliseconds(1000));
+          ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
 
         }
       } else {
