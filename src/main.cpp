@@ -196,17 +196,17 @@ vector<double>  check_lane_behaviour(vector<vector<double >> sensor_fusion, int 
       double nc_next_s = nc[5] + (pp_size +1)*SIM_TICK*nc_speed;   //cars_next location
       double own_s = (pp_size > 0)? params[6]: params[2] ;
       if( ( nc_next_s > own_s) && ((nc_next_s - own_s) <  LANE_HORIZON + off )){  // Find the closest car in horizon, off value to avoid unnecessary overtaking
-      	status = 0;
+        status = 0;
       if (dist_ahead[0] == CONSTANT) { // only first time
-      	dist_ahead[0] = nc_next_s - own_s;
-      	id_ahead[0] = nc[0];
+        dist_ahead[0] = nc_next_s - own_s;
+        id_ahead[0] = nc[0];
       } else {
-      	dist_ahead[1] = nc_next_s - own_s ;
-      	id_ahead[1] = nc[0];
+        dist_ahead[1] = nc_next_s - own_s ;
+        id_ahead[1] = nc[0];
         // Check for the closest car, if multiple cars in range
         if ( MIN(dist_ahead[1],dist_ahead[0]) == dist_ahead[1]){
-        	dist_ahead[0] = dist_ahead[1];
-        	id_ahead[0] = id_ahead[1];
+          dist_ahead[0] = dist_ahead[1];
+          id_ahead[0] = id_ahead[1];
         }
         nc_id=k;
       }
@@ -229,10 +229,13 @@ int main() {
   vector<double> map_waypoints_dx;
   vector<double> map_waypoints_dy;
 
-  // Waypoint map to read from
-  string map_file_ = "../data/highway_map.csv";
-  // The max s value before wrapping around the track back to 0
-  double max_s = 6945.554;
+  string map_file_ = WP_FILE;
+  double max_s = MAX_S_VALUE;
+
+  //set maximum speed, acceleration, and jerk
+  const double speed_limit = MAX_SPEED;
+  const double a_max = MAX_ACCEL;
+  const double j_max = MAX_JERK;
 
   //desired lane
   int target_lane = 1;
@@ -243,20 +246,9 @@ int main() {
   lane_positions.push_back (6.0);
   lane_positions.push_back (10.0);
 
-  //sex maximum speed, acceleration, and jerk
-
-  const double speed_limit = 22.2;
-
-  const double a_max = 9.5;
-
-  const double j_max = 45.0;
-
   //keep track of car's acceleration
   double car_a = 0.0;
-
   double set_speed = 0.0;
-
-  //double set_a = 0.0;
 
   ifstream in_map_(map_file_.c_str(), ifstream::in);
 
