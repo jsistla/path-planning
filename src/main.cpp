@@ -183,11 +183,11 @@ vector<double> getXY(double s, double d, vector<double> maps_s, vector<double> m
 
 // Check for cars ahead in the same lane
 
-vector<double>  check_lane_behaviour(vector<vector<double >> sensor_fusion, int lane, vector<double> params,unsigned int pp_size, unsigned int off ){
+vector<double>  check_lane_forward_behaviour(vector<vector<double >> sensor_fusion, int lane, vector<double> params,unsigned int pp_size, unsigned int off ){
 
   double status = 1;
   int current_lane = find_lane(params[3]); // get actual car lane
-  vector<double> id_ahead = {0,0}, dist_ahead= {CONSTANT,CONSTANT};
+  vector<double> id_ahead = {0,0}, dist_ahead= {LARGE_CONSTANT,LARGE_CONSTANT};
   double nc_id;
   for (unsigned int k = 0; k < sensor_fusion.size();++k) {
     vector<double>  nc = sensor_fusion[k];
@@ -197,7 +197,7 @@ vector<double>  check_lane_behaviour(vector<vector<double >> sensor_fusion, int 
       double own_s = (pp_size > 0)? params[6]: params[2] ;
       if( ( nc_next_s > own_s) && ((nc_next_s - own_s) <  LANE_HORIZON + off )){  // Find the closest car in horizon, off value to avoid unnecessary overtaking
         status = 0;
-      if (dist_ahead[0] == CONSTANT) { // only first time
+      if (dist_ahead[0] == LARGE_CONSTANT) { // only first time
         dist_ahead[0] = nc_next_s - own_s;
         id_ahead[0] = nc[0];
       } else {
@@ -215,7 +215,151 @@ vector<double>  check_lane_behaviour(vector<vector<double >> sensor_fusion, int 
 } // end of for loop for checking all cars
 
 return {status,id_ahead[0],dist_ahead[0]};   // false if car ahead, otherwise true
+}
 
+// check for cars behind in the same lane
+vector<double>  check_lane_back_behaviour(vector<vector<double >> sensor_fusion, int lane, vector<double> params,unsigned int pp_size ) {
+
+  double status =1;
+  int clane = getlane(params[3]); // get actual car lane
+  vector<double> id_ahead = {0,0}, dist_ahead= {LRGENUM,LRGENUM}, speed_bck= {LRGENUM,LRGENUM};
+
+  for (unsigned int k = 0; k < sensor_fusion.size();++k){
+
+    vector<double>  nc = sensor_fusion[k];
+    int nc_id;
+    if (nc[6] > (LC+LW*lane - 2) && (nc[6] < (LC+LW*lane +2) ) ){   // if its in the same lane
+      double nc_speed = sqrt(nc[3] *nc[3] + nc[4]*nc[4]);  // next car's speed
+      double nc_next_s = nc[5] + (pp_size +1)*SIM_TICK*nc_speed;   //cars_next location
+      double own_s = (pp_size > 0)? params[6]: params[2] ;
+
+      if( ( nc_next_s < own_s) && (( own_s -nc_next_s) <  LANE_HORIZON  )){  // Find the closest car in horizon
+        status = 0;
+        if (dist_ahead[0] == LRGENUM) { // only first time
+          dist_ahead[0] = own_s - nc_next_s;
+          speed_bck[0] = nc_speed;
+          id_ahead[0] = nc[0];
+        } else {
+          dist_ahead[1] = own_s - nc_next_s;
+          speed_bck[1] = nc_speed;
+          id_ahead[1] = nc[0];
+          // Check for the closest car, if multiple cars in range
+          if ( MIN(dist_ahead[1],dist_ahead[0]) == dist_ahead[1]) {
+            dist_ahead[0] = dist_ahead[1];
+            id_ahead[0] = id_ahead[1];
+            speed_bck[0] = speed_bck[1];
+          }
+        }
+      } // end of horizon check
+    } // end of loop for cars in same lane
+  } // end of for loop for checking all cars
+
+  return {status, id_ahead[0],dist_ahead[0], speed_bck[0]} ;   // false if car ahead, otherwise true
+}
+
+// calculate cost of path change
+double calc_cost (double inp) {
+  double val = 1 - exp(-1/inp);
+  return val;
+}
+
+// evaluate the cost of changing lanes from current lane
+vector<double> check_costs(vector<vector<double>> sensor_fusion, int lane, vector<double> params,unsigned int pp_size ){
+
+
+  double new_lane = 0, cost1= MAX_COST , cost2 = MAX_COST;
+ // only support single lane changes and not double lane switch from extreme left or right
+  if (lane == 0){  // if car is originally in left most lane, check only for right lane
+    new_lane = lane +1;
+
+    auto fwd_1 = check_fwd_behaviour(sensor_fusion, new_lane,  params, pp_size, LANE_OFF );
+    cost1 =calc_cost(fwd_1[2]);  // get fwd distance cost
+
+    auto bck_1 = check_bck_behaviour(sensor_fusion, new_lane, params, pp_size );
+    cost1 +=calc_cost(bck_1[2]);  // add backward distance cost
+
+
+  }
+
+  if (lane == 1){ // if car is in middle, check for both lanes
+     auto fwd_1 = check_fwd_behaviour(sensor_fusion, lane + 1,  params, pp_size, LANE_OFF );
+     cost1 =calc_cost(fwd_1[2]);
+     auto bck_1 = check_bck_behaviour(sensor_fusion, lane + 1, params, pp_size );
+     cost1 +=calc_cost(bck_1[2]);
+
+     auto fwd_2 = check_fwd_behaviour(sensor_fusion, lane - 1,  params, pp_size, LANE_OFF );
+     cost2 =calc_cost(fwd_2[2]);
+
+     auto bck_2 = check_bck_behaviour(sensor_fusion, lane - 1, params, pp_size );
+     cost2 +=calc_cost(bck_2[2]);
+     if (cost1 <= cost2)
+       new_lane = lane + 1;
+     else {
+       new_lane = lane - 1;
+       cost1 = cost2;
+          }
+  }
+
+  if (lane == 2){ // car on the right, check for middle lane
+      new_lane = lane - 1;
+      auto fwd_1 = check_fwd_behaviour(sensor_fusion, new_lane ,  params, pp_size, LANE_OFF );
+      cost1 =calc_cost(fwd_1[2]);
+
+      auto bck_1 = check_bck_behaviour(sensor_fusion, new_lane , params, pp_size );
+      cost1 +=calc_cost(bck_1[2]);
+
+    }
+
+return {new_lane,cost1};
+
+}
+
+
+
+
+
+void global2car( vector<double> &ptx , vector<double> &pty, double x, double y, double yaw)
+{
+  for (int k = 0; k < ptx.size(); ++k){
+    double x_origin = ptx[k] - x;
+    double y_origin = pty[k] - y;
+
+    ptx[k] = x_origin * cos(-yaw) - y_origin*sin(-yaw);
+    pty[k] = x_origin * sin( -yaw) + y_origin*cos(-yaw);
+
+    }
+}
+
+// get next path points based upon spline
+void get_next_pts(vector<double> &x_pts, vector<double>& y_pts, vector<double> & next_x, vector<double> &next_y,\
+    tk::spline s, unsigned int pp_size, double x, double y, double yaw, double & velocity)
+{
+
+  double x_horizon = PATH_HORIZON ;  // horizon
+  double y_horizon = s(x_horizon);
+  double path = sqrt((x_horizon*x_horizon)  + (y_horizon*y_horizon));
+
+  double x_addon = 0;
+
+
+  for(int k = 1; k < MAX_POINTS - pp_size; ++k){
+
+    double N = 2.24* path / (SIM_TICK * velocity);
+    double x_point = x_addon + (x_horizon/N);
+    double y_point = s(x_point);
+
+    x_addon = x_point ;
+
+    double x_glo_cors = x_point *cos(yaw) - y_point*sin(yaw);
+    double y_glo_cors = x_point *sin(yaw) + y_point*cos(yaw);
+
+    x_glo_cors += x;
+    y_glo_cors += y;
+
+    next_x.push_back(x_glo_cors);
+    next_y.push_back(y_glo_cors);
+
+    }
 }
 
 int main() {

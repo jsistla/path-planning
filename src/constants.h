@@ -24,10 +24,9 @@ double METERS_PER_MILE = 1609.344;
 #define LANE_HORIZON  30.0   // Check how far ahead inside your lane
 #define LANE_OFF      10
 #define REF_VEL       49.0
-#define MAXCOST       10000
-#define THRESH        0.03
+#define MAX_COST       10000
 #define WP_FILE       ("../data/highway_map.csv") /*!< The path to the waypoint file */
-#define CONSTANT      1000000 // very large number
+#define LARGE_CONSTANT      1000000 // very large number
 #define MAX_S_VALUE   6945.554
   // The max s value before wrapping around the track back to 0
 #define MAX_SPEED     22.2
