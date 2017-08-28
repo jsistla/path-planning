@@ -12,17 +12,26 @@
 #include <stdlib.h>
 #include "constants.h"
 
+
 /* #################### NAMESPACES #################### */
 using namespace std;
 using spline = tk::spline;
 using json = nlohmann::json;
 
+/* #################### SIMPLIFICATION #################### */
+typedef vector<int> vi_t;
+typedef vector<double> vd_t;
+typedef vector<vector<int>> vvi_t;
+typedef vector<vector<double>> vvd_t;
+typedef vector<vector<vector<double>>> vvvd_t;
+#define pb push_back
+
 // For converting back and forth between radians and degrees.
 constexpr double pi() { return M_PI; }
 double deg2rad(double x) { return x * pi() / 180; }
 double rad2deg(double x) { return x * 180 / pi(); }
+double ref_vel = 0.0;
 
-double ref_val = 0.0;
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
 // else the empty string "" will be returned.
@@ -57,7 +66,7 @@ int find_lane (double value)
 return current_lane;
 }
 
-int ClosestWaypoint(double x, double y, vector<double> maps_x, vector<double> maps_y)
+int ClosestWaypoint(double x, double y, vd_t maps_x, vd_t maps_y)
 {
 
   double closestLen = 100000; //large number
@@ -80,7 +89,7 @@ return closestWaypoint;
 
 }
 
-int NextWaypoint(double x, double y, double theta, vector<double> maps_x, vector<double> maps_y)
+int NextWaypoint(double x, double y, double theta, vd_t maps_x, vd_t maps_y)
 {
 
   int closestWaypoint = ClosestWaypoint(x,y,maps_x,maps_y);
@@ -102,7 +111,7 @@ int NextWaypoint(double x, double y, double theta, vector<double> maps_x, vector
 }
 
 // Transform from Cartesian x,y coordinates to Frenet s,d coordinates
-vector<double> getFrenet(double x, double y, double theta, vector<double> maps_x, vector<double> maps_y)
+vd_t getFrenet(double x, double y, double theta, vd_t maps_x, vd_t maps_y)
 {
 
   int next_wp = NextWaypoint(x,y, theta, maps_x,maps_y);
@@ -153,7 +162,7 @@ vector<double> getFrenet(double x, double y, double theta, vector<double> maps_x
 }
 
 // Transform from Frenet s,d coordinates to Cartesian x,y
-vector<double> getXY(double s, double d, vector<double> maps_s, vector<double> maps_x, vector<double> maps_y)
+vd_t getXY(double s, double d, vd_t maps_s, vd_t maps_x, vd_t maps_y)
 {
 
   int prev_wp = -1;
@@ -183,14 +192,14 @@ vector<double> getXY(double s, double d, vector<double> maps_s, vector<double> m
 
 // Check for cars ahead in the same lane
 
-vector<double>  check_lane_forward_behaviour(vector<vector<double >> sensor_fusion, int lane, vector<double> params,unsigned int pp_size, unsigned int off ){
+vd_t  check_lane_forward_behaviour(vector<vector<double >> sensor_fusion, int lane, vd_t params,unsigned int pp_size, unsigned int off ){
 
   double status = 1;
   int current_lane = find_lane(params[3]); // get actual car lane
-  vector<double> id_ahead = {0,0}, dist_ahead= {LARGE_CONSTANT,LARGE_CONSTANT};
+  vd_t id_ahead = {0,0}, dist_ahead= {LARGE_CONSTANT,LARGE_CONSTANT};
   double nc_id;
   for (unsigned int k = 0; k < sensor_fusion.size();++k) {
-    vector<double>  nc = sensor_fusion[k];
+    vd_t  nc = sensor_fusion[k];
     if (nc[6] > (LANE_CENTER+LANE_WIDTH*lane - 2) && (nc[6] < (LANE_CENTER+LANE_WIDTH*lane +2) ) ) {   // if its in the same lane
       double nc_speed = sqrt(nc[3] *nc[3] + nc[4]*nc[4]);  // next car's speed
       double nc_next_s = nc[5] + (pp_size +1)*SIM_TICK*nc_speed;   //cars_next location
@@ -218,24 +227,24 @@ return {status,id_ahead[0],dist_ahead[0]};   // false if car ahead, otherwise tr
 }
 
 // check for cars behind in the same lane
-vector<double>  check_lane_back_behaviour(vector<vector<double >> sensor_fusion, int lane, vector<double> params,unsigned int pp_size ) {
+vd_t  check_lane_back_behaviour(vector<vector<double >> sensor_fusion, int lane, vd_t params,unsigned int pp_size ) {
 
   double status =1;
-  int clane = getlane(params[3]); // get actual car lane
-  vector<double> id_ahead = {0,0}, dist_ahead= {LRGENUM,LRGENUM}, speed_bck= {LRGENUM,LRGENUM};
+  int clane = find_lane(params[3]); // get actual car lane
+  vd_t id_ahead = {0,0}, dist_ahead= {LARGE_CONSTANT,LARGE_CONSTANT}, speed_bck= {LARGE_CONSTANT,LARGE_CONSTANT};
 
   for (unsigned int k = 0; k < sensor_fusion.size();++k){
 
-    vector<double>  nc = sensor_fusion[k];
+    vd_t  nc = sensor_fusion[k];
     int nc_id;
-    if (nc[6] > (LC+LW*lane - 2) && (nc[6] < (LC+LW*lane +2) ) ){   // if its in the same lane
+    if (nc[6] > (LANE_CENTER+LANE_WIDTH*lane - 2) && (nc[6] < (LANE_CENTER+LANE_WIDTH*lane +2) ) ){   // if its in the same lane
       double nc_speed = sqrt(nc[3] *nc[3] + nc[4]*nc[4]);  // next car's speed
       double nc_next_s = nc[5] + (pp_size +1)*SIM_TICK*nc_speed;   //cars_next location
       double own_s = (pp_size > 0)? params[6]: params[2] ;
 
       if( ( nc_next_s < own_s) && (( own_s -nc_next_s) <  LANE_HORIZON  )){  // Find the closest car in horizon
         status = 0;
-        if (dist_ahead[0] == LRGENUM) { // only first time
+        if (dist_ahead[0] == LARGE_CONSTANT) { // only first time
           dist_ahead[0] = own_s - nc_next_s;
           speed_bck[0] = nc_speed;
           id_ahead[0] = nc[0];
@@ -258,40 +267,38 @@ vector<double>  check_lane_back_behaviour(vector<vector<double >> sensor_fusion,
 }
 
 // calculate cost of path change
-double calc_cost (double inp) {
+double fn_calc_cost (double inp) {
   double val = 1 - exp(-1/inp);
   return val;
 }
 
 // evaluate the cost of changing lanes from current lane
-vector<double> check_costs(vector<vector<double>> sensor_fusion, int lane, vector<double> params,unsigned int pp_size ){
+vd_t check_costs(vvd_t sensor_fusion, int lane, vd_t params,unsigned int pp_size ){
 
 
   double new_lane = 0, cost1= MAX_COST , cost2 = MAX_COST;
- // only support single lane changes and not double lane switch from extreme left or right
   if (lane == 0){  // if car is originally in left most lane, check only for right lane
     new_lane = lane +1;
 
-    auto fwd_1 = check_fwd_behaviour(sensor_fusion, new_lane,  params, pp_size, LANE_OFF );
-    cost1 =calc_cost(fwd_1[2]);  // get fwd distance cost
+    auto fwd_1 = check_lane_forward_behaviour(sensor_fusion, new_lane,  params, pp_size, LANE_OFF );
+    cost1 =fn_calc_cost(fwd_1[2]);  // get fwd distance cost
 
-    auto bck_1 = check_bck_behaviour(sensor_fusion, new_lane, params, pp_size );
-    cost1 +=calc_cost(bck_1[2]);  // add backward distance cost
-
+    auto bck_1 = check_lane_back_behaviour(sensor_fusion, new_lane, params, pp_size );
+    cost1 +=fn_calc_cost(bck_1[2]);  // add backward distance cost
 
   }
 
   if (lane == 1){ // if car is in middle, check for both lanes
-     auto fwd_1 = check_fwd_behaviour(sensor_fusion, lane + 1,  params, pp_size, LANE_OFF );
-     cost1 =calc_cost(fwd_1[2]);
-     auto bck_1 = check_bck_behaviour(sensor_fusion, lane + 1, params, pp_size );
-     cost1 +=calc_cost(bck_1[2]);
+     auto fwd_1 = check_lane_forward_behaviour(sensor_fusion, lane + 1,  params, pp_size, LANE_OFF );
+     cost1 =fn_calc_cost(fwd_1[2]);
+     auto bck_1 = check_lane_back_behaviour(sensor_fusion, lane + 1, params, pp_size );
+     cost1 +=fn_calc_cost(bck_1[2]);
 
-     auto fwd_2 = check_fwd_behaviour(sensor_fusion, lane - 1,  params, pp_size, LANE_OFF );
-     cost2 =calc_cost(fwd_2[2]);
+     auto fwd_2 = check_lane_forward_behaviour(sensor_fusion, lane - 1,  params, pp_size, LANE_OFF );
+     cost2 =fn_calc_cost(fwd_2[2]);
 
-     auto bck_2 = check_bck_behaviour(sensor_fusion, lane - 1, params, pp_size );
-     cost2 +=calc_cost(bck_2[2]);
+     auto bck_2 = check_lane_back_behaviour(sensor_fusion, lane - 1, params, pp_size );
+     cost2 +=fn_calc_cost(bck_2[2]);
      if (cost1 <= cost2)
        new_lane = lane + 1;
      else {
@@ -302,11 +309,11 @@ vector<double> check_costs(vector<vector<double>> sensor_fusion, int lane, vecto
 
   if (lane == 2){ // car on the right, check for middle lane
       new_lane = lane - 1;
-      auto fwd_1 = check_fwd_behaviour(sensor_fusion, new_lane ,  params, pp_size, LANE_OFF );
-      cost1 =calc_cost(fwd_1[2]);
+      auto fwd_1 = check_lane_forward_behaviour(sensor_fusion, new_lane ,  params, pp_size, LANE_OFF );
+      cost1 =fn_calc_cost(fwd_1[2]);
 
-      auto bck_1 = check_bck_behaviour(sensor_fusion, new_lane , params, pp_size );
-      cost1 +=calc_cost(bck_1[2]);
+      auto bck_1 = check_lane_back_behaviour(sensor_fusion, new_lane , params, pp_size );
+      cost1 +=fn_calc_cost(bck_1[2]);
 
     }
 
@@ -314,11 +321,8 @@ return {new_lane,cost1};
 
 }
 
-
-
-
-
-void global2car( vector<double> &ptx , vector<double> &pty, double x, double y, double yaw)
+//convert global XY coordinates to car's reference frame to allow for polynomial smoothing
+void global_XY_car_ref( vd_t &ptx , vd_t &pty, double x, double y, double yaw)
 {
   for (int k = 0; k < ptx.size(); ++k){
     double x_origin = ptx[k] - x;
@@ -331,7 +335,7 @@ void global2car( vector<double> &ptx , vector<double> &pty, double x, double y, 
 }
 
 // get next path points based upon spline
-void get_next_pts(vector<double> &x_pts, vector<double>& y_pts, vector<double> & next_x, vector<double> &next_y,\
+void get_next_pts(vd_t &x_pts, vd_t& y_pts, vd_t & next_x, vd_t &next_y,\
     tk::spline s, unsigned int pp_size, double x, double y, double yaw, double & velocity)
 {
 
@@ -367,11 +371,11 @@ int main() {
   uWS::Hub h;
 
   // Load up map values for waypoint's x,y,s and d normalized normal vectors
-  vector<double> map_waypoints_x;
-  vector<double> map_waypoints_y;
-  vector<double> map_waypoints_s;
-  vector<double> map_waypoints_dx;
-  vector<double> map_waypoints_dy;
+  vd_t map_waypoints_x;
+  vd_t map_waypoints_y;
+  vd_t map_waypoints_s;
+  vd_t map_waypoints_dx;
+  vd_t map_waypoints_dy;
 
   string map_file_ = WP_FILE;
   double max_s = MAX_S_VALUE;
@@ -385,7 +389,7 @@ int main() {
   int target_lane = 1;
 
   //vector defining Frenet d coordinate for center of each lane
-  vector<double> lane_positions;
+  vd_t lane_positions;
   lane_positions.push_back (2.0);
   lane_positions.push_back (6.0);
   lane_positions.push_back (10.0);
@@ -435,197 +439,116 @@ int main() {
         if (event == "telemetry") {
            // j[1] is the data JSON object
            // Main car's localization Data
-          double car_x = j[1]["x"];
-          double car_y = j[1]["y"];
-          double car_s = j[1]["s"];
-          double car_d = j[1]["d"];
-          double car_yaw = j[1]["yaw"];
-          double car_speed = j[1]["speed"];
+           double car_x = j[1]["x"];
+           double car_y = j[1]["y"];
+           double car_s = j[1]["s"];
+           double car_d = j[1]["d"];
+           double car_yaw = j[1]["yaw"];
+           double car_speed = j[1]["speed"];
 
-          // Previous path data given to the Planner
-          auto previous_path_x = j[1]["previous_path_x"];
-          auto previous_path_y = j[1]["previous_path_y"];
-          // Previous path's end s and d values
-          double end_path_s = j[1]["end_path_s"];
-          double end_path_d = j[1]["end_path_d"];
+           // Previous path data given to the Planner
+           auto previous_path_x = j[1]["previous_path_x"];
+           auto previous_path_y = j[1]["previous_path_y"];
+           // Previous path's end s and d values
+           double end_path_s = j[1]["end_path_s"];
+           double end_path_d = j[1]["end_path_d"];
+           vector<double> params = {car_x,car_y,car_s,car_d,car_yaw,car_speed,end_path_s, end_path_d };
+           // Sensor Fusion Data, a list of all other cars on the same side of the road.
+           auto sensor_fusion = j[1]["sensor_fusion"];
 
-          // Sensor Fusion Data, a list of all other cars on the same side of the road.
-          auto sensor_fusion = j[1]["sensor_fusion"];
+           json msgJson;
+           unsigned int pp_size = previous_path_x.size();   //previous path size
 
-          json msgJson;
+           int lane = find_lane(car_d);
+           vector<double> next_x_vals;
+           vector<double> next_y_vals;
 
-          vector<double> next_x_vals;
-          vector<double> next_y_vals;
+           // put previous path points in next points' vector
+           for(int k = 0; k < previous_path_x.size(); ++k) {
+             next_x_vals.push_back(previous_path_x[k]);
+             next_y_vals.push_back(previous_path_y[k]);
+           }
 
-          // TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
+           //  define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
+           vector<double> x_pts;
+           vector<double> y_pts;
 
-          bool too_close = false;
-
-          int prev_points = previous_path_x.size();
-
-          if(prev_points > 0)
-            car_s = end_path_s;
-
-
-            //iterate through detected vehicles, determine if there is a car ahead going below speed limit
-            double check_distance = 1000;
-            double check_speed = 1000;
-
-            for(int i=0; i<sensor_fusion.size(); i++)
-            {
-                //determine if car is directly ahead
-                float sensor_d = sensor_fusion[i][6];
-                if ((sensor_d < (2+4*target_lane+2)) && (sensor_d > (2+4*target_lane-2)))
-                {
-                    double vx = sensor_fusion[i][3];
-                    double vy = sensor_fusion[i][4];
-                    check_speed = sqrt(vx*vx + vy*vy);
-                    double check_car_s = sensor_fusion[i][5];
-
-                    check_car_s += (double)prev_points*.02*check_speed;
-
-                    check_distance = check_car_s-car_s;
-
-                    //adjust check_distance when wrapping around max_s to zero
-                    if (check_distance > (max_s/2.0))
-                        check_distance -= max_s;
-                    if (check_distance < (-1.0*max_s/2.0))
-                        check_distance += max_s;
-
-                    if( (check_car_s > car_s) && (check_distance<23) ) {
-                        too_close = true;
-                        if(target_lane > 0) {
-                            target_lane = 0;
-                        } else {
-                            target_lane = 1;
-                        }
-                    }
-                }
-            }
+           double x_ref = car_x;
+           double y_ref = car_y;
+           double yaw_ref = deg2rad(car_yaw);
 
 
+           // Check if keep going straight is fine
+           auto result = check_lane_forward_behaviour(sensor_fusion, lane, params,pp_size,0);
 
-            if(too_close)
-            {
-                ref_val -= 0.224;
-            }
-            else if (ref_val < 49.50)
-            {
-                ref_val += 0.224;
-            }
+           if (0 == result[0]) { // car ahead, react by changing lane and/or reduce speed
+             // check costs for moving to appropriate lane
+             auto lane_cost= check_costs(sensor_fusion, lane, params, pp_size);
+             // check costs for staying in the same lane
+             auto cost1 = fn_calc_cost(double(result[2]));
 
+             if (   (cost1 > lane_cost[1])      && (abs(cost1 - lane_cost[1]) > THRESH)   ){
+               lane = lane_cost[0];   // lane change
+               ref_vel += 2.0/2.24;
+             }
 
-          vector<double> ptsx;
-          vector<double> ptsy;
+             ref_vel -= 2.0/2.24;  // reduce velocity as theres a car ahead or lane changed
+         } else if (ref_vel < REF_VEL) {  // keep driving straight and increase speed
+             ref_vel += 2.0/2.24;
+             if (ref_vel >  REF_VEL)	// safety check on max speed
+               ref_vel = REF_VEL;
+         }
 
+         // get future trajectory
+         if (pp_size < 2) { // simulation just started
+           x_pts.push_back(car_x - cos(car_yaw));
+           x_pts.push_back(car_x);
+           y_pts.push_back(car_y - sin(car_yaw));
+           y_pts.push_back(car_y);
+         } else {  // car has a previous path
 
-          double ref_x = car_x;
-          double ref_y = car_y;
-          double ref_yaw = deg2rad(car_yaw);
+           x_ref = previous_path_x[pp_size - 1];
+           y_ref = previous_path_y[pp_size - 1];
 
-          if(prev_points < 2)
-            {
-                //create two points defining a path tangent to the car
-                double prev_car_x = car_x - cos(car_yaw);
-                double prev_car_y = car_y - sin(car_yaw);
+           double x_ref_prev = previous_path_x[pp_size - 2];
+           double y_ref_prev = previous_path_y[pp_size - 2];
 
-                ptsx.push_back(prev_car_x);
-                ptsx.push_back(car_x);
+           x_pts.push_back(x_ref_prev);
+           x_pts.push_back(x_ref);
 
-                ptsy.push_back(prev_car_y);
-                ptsy.push_back(car_y);
-            }
-            //use end of previous path as starting reference
-            else
-            {
-                ref_x = previous_path_x[prev_points-1];
-                ref_y = previous_path_y[prev_points-1];
+           y_pts.push_back(y_ref_prev);
+           y_pts.push_back(y_ref);
 
-                double ref_x_prev = previous_path_x[prev_points-2];
-                double ref_y_prev = previous_path_y[prev_points-2];
-                ref_yaw = atan2(ref_y-ref_y_prev, ref_x-ref_x_prev);
+           yaw_ref = atan2(y_ref - y_ref_prev,x_ref-x_ref_prev);
 
-
-                ptsx.push_back(ref_x_prev);
-                ptsx.push_back(ref_x);
-
-                ptsy.push_back(ref_y_prev);
-                ptsy.push_back(ref_y);
-            }
+         }
 
 
+         vector<double> wp0 = getXY(car_s + 60,(LANE_CENTER + LANE_WIDTH* lane),map_waypoints_s,map_waypoints_x,map_waypoints_y);
+         vector<double> wp1 = getXY(car_s + 75,(LANE_CENTER + LANE_WIDTH* lane),map_waypoints_s,map_waypoints_x,map_waypoints_y);
+         vector<double> wp2 = getXY(car_s + 90,(LANE_CENTER + LANE_WIDTH*lane),map_waypoints_s,map_waypoints_x,map_waypoints_y);
 
-            cout << ptsx[0] << ", " << ptsy[0] << ", " << ptsx[1] << ", " << ptsy[1] << ", " << car_yaw << "\n";
-            cout << check_distance << "\n";
+         x_pts.push_back(wp0[0]);
+         x_pts.push_back(wp1[0]);
+         x_pts.push_back(wp2[0]);
 
-            //define rough path in Frenet coordinates, convert to XY
-
-            vector<double> next_wp0 = getXY(car_s+30, lane_positions[target_lane], map_waypoints_s, map_waypoints_x, map_waypoints_y);
-            vector<double> next_wp1 = getXY(car_s+60, lane_positions[target_lane], map_waypoints_s, map_waypoints_x, map_waypoints_y);
-            vector<double> next_wp2 = getXY(car_s+90, lane_positions[target_lane], map_waypoints_s, map_waypoints_x, map_waypoints_y);
-
-
-            ptsx.push_back(next_wp0[0]);
-            ptsx.push_back(next_wp1[0]);
-            ptsx.push_back(next_wp2[0]);
-
-            ptsy.push_back(next_wp0[1]);
-            ptsy.push_back(next_wp1[1]);
-            ptsy.push_back(next_wp2[1]);
+         y_pts.push_back(wp0[1]);
+         y_pts.push_back(wp1[1]);
+         y_pts.push_back(wp2[1]);
 
 
-            //convert global XY coordinates to car's reference frame to allow for polynomial smoothing
-            for (int i=0; i<ptsx.size(); i++)
-            {
-                double shift_x = ptsx[i]-ref_x;
-                double shift_y = ptsy[i]-ref_y;
+         // change to car coordinates
+         global_XY_car_ref(x_pts , y_pts, x_ref, y_ref, yaw_ref );
 
-                ptsx[i] = (shift_x*cos(0-ref_yaw)-shift_y*sin(0-ref_yaw));
-                ptsy[i] = (shift_x*sin(0-ref_yaw)+shift_y*cos(0-ref_yaw));
-            }
+         tk::spline s;  //declare spline
+         s.set_points(x_pts,y_pts); // spline for 5 points
+          // get future points, code based on Project Q&A video
+          get_next_pts(x_pts,y_pts,next_x_vals, next_y_vals, s, pp_size,x_ref,y_ref, yaw_ref,ref_vel);
 
 
-            //create spline for smooth path
-            tk::spline sp;
-            sp.set_points(ptsx,ptsy);
+          // Finished
 
-            //load previous points into path planner
-            for (int i=0; i<prev_points; i++)
-            {
-                next_x_vals.push_back(previous_path_x[i]);
-                next_y_vals.push_back(previous_path_y[i]);
-            }
-
-            //caLANE_CENTERulate remaining points for path planner based on spline
-            double target_x = 30.0;
-            double target_y = sp(target_x);
-            double target_dist = sqrt(target_x*target_x + target_y*target_y);
-
-            double x_add_on = 0;
-
-            for(int i = 0; i <= 50-prev_points; i++)
-            {
-                double N = (target_dist/(.02*ref_val/2.24));
-                double x_point = x_add_on+target_x/N;
-                double y_point = sp(x_point);
-
-                x_add_on = x_point;
-
-                double x_ref = x_point;
-                double y_ref = y_point;
-
-                //convert points back to global coordinates
-                x_point = (x_ref*cos(ref_yaw)-y_ref*sin(ref_yaw));
-                y_point = (x_ref*sin(ref_yaw)+y_ref*cos(ref_yaw));
-
-                x_point += ref_x;
-                y_point += ref_y;
-
-                next_x_vals.push_back(x_point);
-                next_y_vals.push_back(y_point);
-            }
-
-          //*********************************************************************************
+          // Sending points to the simulator
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
 

@@ -32,4 +32,5 @@ double METERS_PER_MILE = 1609.344;
 #define MAX_SPEED     22.2
 #define MAX_ACCEL     9.5
 #define MAX_JERK      45.0
+#define  THRESH       0.03
 #endif //PATH_PLANNING_CONSTANTS_H
