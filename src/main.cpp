@@ -22,6 +22,7 @@ using json = nlohmann::json;
 typedef vector<int> vi_t;
 typedef vector<double> vd_t;
 typedef vector<vector<int>> vvi_t;
+typedef vector<vector<double>> vvd_t;
 #define pb push_back
 
 // For converting back and forth between radians and degrees.
@@ -250,7 +251,7 @@ double fn_calc_cost (double inp) {
 }
 
 // evaluate the cost of changing lanes from current lane
-vd_t check_costs(vvd_t sensor_fusion, int lane, vd_t params,unsigned int pp_size ){
+vd_t check_costs(vvd_t sensor_fusion, int lane, vd_t params, unsigned int pp_size ){
 
 
   double new_lane = 0, cost1= MAX_COST , cost2 = MAX_COST;
