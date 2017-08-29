@@ -1,6 +1,48 @@
 # CarND-Path-Planning-Project
 Self-Driving Car Engineer Nanodegree Program
-   
+
+ ### Using path planning techniques to drive the car along the highway.
+
+ ##### Generation of Path Points:
+ There are two main steps involved in driving the car on the highway. Firstly, in which lane to
+ drive the car in, and secondly, if a certain lane is provide how to generate points so that the
+ car follows the path.
+
+ ##### Choosing the Lane:
+ This is mainly based on a finite state machine, who has only two states namely drive the same lane  or change lane to left or change lane right. There has been no explicit
+ prepare lane change state, Reason being that other cars in the simulator can
+ handle their speed individually, and they can react well to Ego’s maneuvers. The only precaution  is to check that there is enough path left for the car coming from behind in the new proposed lane, so that it can see Ego vehicle changing its lane. This avoids collision from behind which serves the purpose for the project.
+
+ Ego starts at 0 velocity in its own lane (Lane 1), and checks the path ahead over a distance LANE_HORIZON using the check_lane_fwd_behavior() function.If the distance is free from other cars, Ego picks up speed and reaches up to the reference velocity which is set to 49.60 MPH to completely avoid any speed violation.
+
+ ##### Cost Function:
+ I used the same cost function as taught in the lesson.This function calculate the costs of staying in the same lane or changing to left or right.
+
+ The cost function used here is
+
+                        𝐽 = 1 − 𝑒−∆𝑑/∆𝑠
+                        Δd is the lateral distance for changing a lane.
+                        Δs is distance between Ego and a car front (or behind).
+
+ The state machine will first see the feasibility to move to lane 1 and then if desired move to lane 2. Because of this limitation, Δd will always be approximately 4m which is the lane length. Because of its fixed nature, Δd is set to 1 in the simulation.
+
+
+ ##### Analyzing Future Lane:
+ In the check_cost() function, available distance in front and behind of Ego for the proposed
+ lane is checked. If this distance is greater than LANE_HORIZON, ∆𝑠 will be set to a large
+ number, indicating that there is enough room for the car to change lane; otherwise the actual
+ distance ahead and back is used to calculate the cost. This cost is then compared later, with
+ the cost of staying in the same lane by using the distance between Ego and its nearest car
+ ahead. Based on the smallest cost, Ego either remains in the lane and adjusts speed or changes
+ the lane.
+
+ ##### Finally the path creation:
+ Once the lane is decided, path points are generated using the spline algorithm discussed
+ in the project video.The first two anchor points are from Ego’s old and current position. The next three points are drawn ahead of the car in the same or new lane based on the state machine. Using these anchors, spline algorithm is activated. Afterwards, over a distance of PATH_HORIZON, new future x-points are created using the car’s speed and simulation tick interval (20ms), and spline creates the corresponding y-coordinates. Using a combination of these new points and path points
+ from previous iteration, a path is produced.
+
+
+
 ### Simulator.
 You can download the Term3 Simulator which contains the Path Planning Project from the [releases tab (https://github.com/udacity/self-driving-car-sim/releases).
 
@@ -38,13 +80,13 @@ Here is the data provided from the Simulator to the C++ Program
 #### Previous path data given to the Planner
 
 //Note: Return the previous list but with processed points removed, can be a nice tool to show how far along
-the path has processed since last time. 
+the path has processed since last time.
 
 ["previous_path_x"] The previous list of x points previously given to the simulator
 
 ["previous_path_y"] The previous list of y points previously given to the simulator
 
-#### Previous path's end s and d values 
+#### Previous path's end s and d values
 
 ["end_path_s"] The previous list's last point's frenet s value
 
@@ -52,7 +94,7 @@ the path has processed since last time.
 
 #### Sensor Fusion Data, a list of all other car's attributes on the same side of the road. (No Noise)
 
-["sensor_fusion"] A 2d vector of cars and then that car's [car's unique ID, car's x position in map coordinates, car's y position in map coordinates, car's x velocity in m/s, car's y velocity in m/s, car's s position in frenet coordinates, car's d position in frenet coordinates. 
+["sensor_fusion"] A 2d vector of cars and then that car's [car's unique ID, car's x position in map coordinates, car's y position in map coordinates, car's x velocity in m/s, car's y velocity in m/s, car's s position in frenet coordinates, car's d position in frenet coordinates.
 
 ## Details
 
@@ -82,7 +124,7 @@ A really helpful resource for doing this project and creating smooth trajectorie
   * Run either `install-mac.sh` or `install-ubuntu.sh`.
   * If you install from source, checkout to commit `e94b6e1`, i.e.
     ```
-    git clone https://github.com/uWebSockets/uWebSockets 
+    git clone https://github.com/uWebSockets/uWebSockets
     cd uWebSockets
     git checkout e94b6e1
     ```
