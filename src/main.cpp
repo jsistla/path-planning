@@ -491,7 +491,7 @@ int main() {
 
          }
 
-         cout << x_pts[0] << ", " << y_pts[0] << ", " << x_pts[1] << ", " << y_pts[1] << ", " << car_yaw << "\n";
+         //cout << x_pts[0] << ", " << y_pts[0] << ", " << x_pts[1] << ", " << y_pts[1] << ", " << car_yaw << "\n";
 
          vd_t wp0 = getXY(car_s + 60,(LANE_CENTER + LANE_WIDTH* lane),map_waypoints_s,map_waypoints_x,map_waypoints_y);
          vd_t wp1 = getXY(car_s + 75,(LANE_CENTER + LANE_WIDTH* lane),map_waypoints_s,map_waypoints_x,map_waypoints_y);
